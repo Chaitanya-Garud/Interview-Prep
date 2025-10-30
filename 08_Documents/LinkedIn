@@ -1,0 +1,33 @@
+========================================
+DevOps Engineer
+========================================
+
+Supported Jenkins-based CI/CD pipelines integrated with GitHub to automate application build and deployment processes across Development, Testing, and Production environments
+
+Containerized applications using Docker and deployed them on EKS clusters through Helm, storing images in AWS ECR to ensure consistent, reliable, and stable rollouts across environments.
+
+Created Shell scripts for EC2 health checks, log cleanup, and automation tasks using AWS CLI, reducing manual work.
+
+Managed AWS infrastructure across Dev, Test, and Staging environments using Terraform modules, ensuring standardized provisioning, configuration compliance, and consistent environment setup.
+
+Managed and maintained EKS clusters running containerized microservices, performing pod troubleshooting, node scaling, application deployments using kubectl and Helm
+
+Monitored infrastructure and container performance using Dynatrace and AWS CloudWatch, reviewing existing dashboards and alerts to track CPU, memory, and disk utilization, and escalating anomalies to maintain system reliability and observability.
+
+
+
+========================================
+Technical Support Engineer
+========================================
+
+• Handled 300+ technical support tickets monthly, resolving many on first contact, conducting prompt initial investigations, and collaborating with escalation teams to accelerate resolution and enhance customer satisfaction.
+
+• Provided multi-channel technical support via calls, emails, and chat, delivering timely assistance and accurate guidance.
+
+• Managed DNS configurations, website and email migrations, and resolved all website-related issues within SLA targets.
+
+• Performed daily backup checks and restorations using Comet Backup and Azure Backups to ensure data integrity and system recovery readiness.
+
+• Monitored system alerts and performance metrics using tools like PRTG, Uptime Robot, and Observium.
+
+• Developed and maintained technical documentation and troubleshooting guides to enhance team efficiency, resulting in a reduction of repetitive ticket volume.
