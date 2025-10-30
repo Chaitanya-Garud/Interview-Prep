@@ -1,0 +1,1 @@
+Automated OS Patching (part of SSM)

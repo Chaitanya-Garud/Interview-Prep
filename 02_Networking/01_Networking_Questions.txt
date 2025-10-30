@@ -1,0 +1,6 @@
+What is Waterfall Model?
+What is Agile Methodology?
+What is OSI Model?
+What is TCP/IP Model?
+What is Private IP?
+What is Public IP?
