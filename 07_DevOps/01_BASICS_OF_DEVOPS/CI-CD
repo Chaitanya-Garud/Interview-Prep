@@ -1,0 +1,168 @@
+What is CI/CD?
+CI/CD stands for Continuous Integration and Continuous Deployment/Delivery.
+It is a DevOps practice that helps in automating the software build, test, and deployment process, ensuring faster and more reliable delivery of code to production.
+
+1. Continuous Integration (CI)
+Continuous Integration means developers frequently merge their code changes into a shared repository (for example, GitHub, GitLab, or Bitbucket).
+ Each time new code is pushed, it triggers an automated build and test process.
+Key Points:
+
+Code Integration:
+All developers commit code regularly (often multiple times a day) into a central repository.
+This prevents “integration hell,” where merging code becomes difficult at the end of a project.
+
+
+Automated Build:
+As soon as code is pushed, the CI tool (like Jenkins, GitLab CI, GitHub Actions, or CircleCI) automatically triggers a build pipeline.
+The code is compiled, and dependencies are installed.
+
+
+Automated Testing:
+After the build, automated tests (unit tests, integration tests, etc.) run to verify that the new code does not break existing functionality.
+
+
+Immediate Feedback:
+Developers get instant feedback if their commit fails the build or test.
+This helps in catching bugs early in the development stage.
+
+
+Tools Used in CI:
+Jenkins, GitHub Actions, GitLab CI, CircleCI, Travis CI, Bamboo, etc.
+
+
+Benefits of CI:
+Early detection of bugs.
+Faster integration and collaboration.
+Ensures code quality and stability.
+
+
+2. Continuous Delivery (CD)
+Continuous Delivery means that after successful integration and testing, the code is automatically prepared for deployment to production or staging environments.
+Key Points:
+
+Automated Deployment Pipeline:
+Once CI passes successfully, a pipeline automatically deploys the build to a staging or UAT (User Acceptance Testing) environment.
+The deployment can still be manually approved before going to production.
+
+
+Environment Configuration:
+Configuration files (like YAML, Helm charts, or Terraform scripts) are used to deploy applications in a consistent way across all environments.
+
+
+Testing Before Release:
+Further automated tests, like UI tests, integration tests, and load tests, can be executed in the staging environment.
+
+
+Manual Approval Stage:
+Before production, there can be a manual approval gate — for example, the DevOps or QA lead approves the release.
+
+
+Tools Used for Delivery:
+Jenkins, Argo CD, Spinnaker, GitLab CI/CD, AWS CodePipeline, Azure DevOps, etc.
+
+
+Benefits of Continuous Delivery:
+Deployments become predictable and repeatable.
+Faster time to market.
+Reduces deployment risk because changes are small and frequent.
+
+
+3. Continuous Deployment (CD)
+Continuous Deployment takes Continuous Delivery one step further —
+Here, every code change that passes automated tests is automatically deployed to production without any manual approval.
+Key Points:
+
+Fully Automated Release:
+There is no manual intervention.
+Once the code passes all tests, it is automatically released to production.
+
+
+Monitoring and Rollback:
+Monitoring tools (like Prometheus, Grafana, ELK Stack) continuously observe the deployed application.
+If an issue occurs, automatic rollback or alerting can be triggered.
+
+
+Tools Used for Continuous Deployment:
+Jenkins, Argo CD, Spinnaker, Harness, AWS CodeDeploy, Azure DevOps Pipelines.
+
+
+Benefits:
+Faster delivery of features to users.
+Continuous feedback from real-world usage.
+Reduces human error in deployments.
+
+
+4. CI/CD Pipeline Flow (Step-by-Step Example)
+Let us take a simple example of a project managed through a CI/CD pipeline:
+
+Code Commit:
+Developer pushes code to GitHub.
+
+
+Trigger Pipeline:
+Jenkins detects the new commit through a webhook.
+
+
+Build Stage:
+Jenkins compiles the code using Maven or Gradle.
+
+
+Testing Stage:
+Jenkins runs unit and integration tests automatically.
+
+
+Build Artifact:
+Jenkins stores a build artifact (like a .jar or Docker image) in a repository such as Nexus or Docker Hub.
+
+
+Deploy to Staging:
+The code is deployed to a staging environment (using Ansible, Kubernetes, or Helm).
+
+
+Approval Step (optional):
+QA team tests the staging version and approves it.
+
+
+Deploy to Production:
+Jenkins automatically deploys to production once approved (or automatically if it is Continuous Deployment).
+
+
+Monitoring:
+Tools like Prometheus and Grafana monitor performance and health.
+
+
+5. Real-World Example
+Let us take an example with Jenkins and Docker:
+
+Developer commits code → GitHub.
+
+Jenkins pipeline triggers automatically.
+
+
+Stages:
+
+Checkout code from GitHub.
+Build Docker image.
+Run unit tests inside container.
+Push image to Docker Hub.
+Deploy container to Kubernetes cluster.
+Notify team via Slack.
+
+This is a complete CI/CD workflow, ensuring continuous testing, building, and deployment.
+
+6. Advantages of CI/CD
+
+Faster software delivery.
+Improved code quality.
+Reduced manual effort and human errors.
+Easier rollbacks and updates.
+Quick feedback loops for developers.
+
+
+High customer satisfaction due to faster feature release.
+
+
+7. Conclusion
+In simple words:
+CI/CD automates everything from code integration to deployment, ensuring that software is always in a deployable state.
+It bridges the gap between development and operations, which is the core goal of DevOps.
