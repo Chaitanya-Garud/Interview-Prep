@@ -1,0 +1,201 @@
+pipeline {
+
+    agent { label 'helm-agent' }
+
+    environment {
+
+        AWS_REGION = "ap-south-1"
+
+        ACCOUNT_ID = "123456789012"
+
+        APP = "payment-service"
+
+        IMAGE_TAG = "2.5.0"
+
+        ECR = "${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${APP}"
+
+    }
+
+    stages {
+
+        stage('Checkout Release') {
+
+            steps {
+
+                checkout scm
+
+            }
+
+        }
+
+        stage('Verify Release Branch') {
+
+            steps {
+
+                script {
+
+                    if(!env.BRANCH_NAME.startsWith("release/")){
+
+                        error("Only Release Branch Allowed")
+
+                    }
+
+                }
+
+            }
+
+        }
+
+        stage('Login Amazon ECR') {
+
+            steps {
+
+                withAWS(credentials:'aws-creds',region:"${AWS_REGION}"){
+
+                    sh '''
+
+                    aws ecr get-login-password | docker login \
+                    --username AWS \
+                    --password-stdin ${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com
+
+                    '''
+
+                }
+
+            }
+
+        }
+
+        stage('Pull Approved Image') {
+
+            steps {
+
+                sh """
+
+                docker pull ${ECR}:${IMAGE_TAG}
+
+                """
+
+            }
+
+        }
+
+        stage('Verify Image') {
+
+            steps {
+
+                sh """
+
+                docker inspect ${ECR}:${IMAGE_TAG}
+
+                """
+
+            }
+
+        }
+
+        stage('Helm Lint') {
+
+            steps {
+
+                sh """
+
+                helm lint helm/payment-service
+
+                """
+
+            }
+
+        }
+
+        stage('Deploy SIT') {
+
+            steps {
+
+                withAWS(credentials:'aws-creds',region:"${AWS_REGION}"){
+
+                    sh """
+
+                    aws eks update-kubeconfig \
+                    --region ${AWS_REGION} \
+                    --name sit-eks-cluster
+
+                    """
+
+                    sh """
+
+                    helm upgrade --install payment-service \
+                    helm/payment-service \
+                    --namespace sit \
+                    --create-namespace \
+                    --set image.repository=${ECR} \
+                    --set image.tag=${IMAGE_TAG} \
+                    --atomic \
+                    --wait
+
+                    """
+
+                }
+
+            }
+
+        }
+
+        stage('Verify Rollout') {
+
+            steps {
+
+                sh """
+
+                kubectl rollout status deployment/payment-service \
+                -n sit
+
+                """
+
+            }
+
+        }
+
+        stage('Smoke Test') {
+
+            steps {
+
+                sh "newman run smoke.postman_collection.json"
+
+            }
+
+        }
+
+        stage('Integration Test') {
+
+            steps {
+
+                sh "newman run integration.postman_collection.json"
+
+            }
+
+        }
+
+        stage('API Test') {
+
+            steps {
+
+                sh "newman run api.postman_collection.json"
+
+            }
+
+        }
+
+        stage('QA Approval') {
+
+            steps {
+
+                input "QA Sign-Off?"
+
+            }
+
+        }
+
+    }
+
+}
