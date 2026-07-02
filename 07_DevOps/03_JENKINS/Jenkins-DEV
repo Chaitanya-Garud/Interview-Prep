@@ -1,0 +1,574 @@
+pipeline {
+
+    agent {
+        label 'java-maven'
+    }
+
+    tools {
+        jdk 'JDK20'
+        maven 'Maven3'
+    }
+
+    options {
+        buildDiscarder(logRotator(numToKeepStr: '20'))
+        disableConcurrentBuilds()
+        timestamps()
+        ansiColor('xterm')
+        timeout(time: 60, unit: 'MINUTES')
+    }
+
+    environment {
+
+        AWS_REGION = "ap-south-1"
+        AWS_ACCOUNT = "123456789012"
+
+        APPLICATION = "payment-service"
+
+        ECR_REPO = "${APPLICATION}"
+
+        ECR_URI = "${AWS_ACCOUNT}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPO}"
+
+        IMAGE_TAG = "${BUILD_NUMBER}"
+
+        SONAR_HOME = tool 'sonar-scanner'
+
+        MAVEN_OPTS = "-Dmaven.test.failure.ignore=false"
+
+    }
+
+    stages {
+
+        stage('Checkout Source') {
+
+            steps {
+
+                checkout([
+                    $class: 'GitSCM',
+                    branches: [[name: '*/develop']],
+                    userRemoteConfigs: [[
+                        credentialsId: 'github-creds',
+                        url: 'https://github.com/bank/payment-service.git'
+                    ]]
+                ])
+
+            }
+        }
+
+        stage('Branch Validation') {
+
+            steps {
+
+                script {
+
+                    if(env.BRANCH_NAME != "develop"){
+
+                        error("Only develop branch is allowed")
+
+                    }
+
+                }
+
+            }
+
+        }
+
+        stage('Validate Commit Message') {
+
+            steps {
+
+                sh '''
+
+                git log -1 --pretty=%B > commit.txt
+
+                cat commit.txt
+
+                '''
+
+            }
+
+        }
+
+        stage('Compile') {
+
+            steps {
+
+                sh "mvn clean compile"
+
+            }
+
+        }
+
+        stage('Unit Test') {
+
+            steps {
+
+                sh "mvn test"
+
+            }
+
+            post {
+
+                always {
+
+                    junit '**/target/surefire-reports/*.xml'
+
+                }
+
+            }
+
+        }
+
+        stage('Code Coverage') {
+
+            steps {
+
+                sh "mvn jacoco:report"
+
+            }
+
+        }
+
+        stage('SonarQube Analysis') {
+
+            steps {
+
+                withSonarQubeEnv('sonar') {
+
+                    sh """
+
+                    ${SONAR_HOME}/bin/sonar-scanner \
+                    -Dsonar.projectKey=${APPLICATION} \
+                    -Dsonar.projectName=${APPLICATION} \
+                    -Dsonar.sources=. \
+                    -Dsonar.java.binaries=target/classes
+
+                    """
+
+                }
+
+            }
+
+        }
+
+        stage('Quality Gate') {
+
+            steps {
+
+                timeout(time:5, unit:'MINUTES') {
+
+                    waitForQualityGate abortPipeline: true
+
+                }
+
+            }
+
+        }
+
+        stage('Filesystem Scan') {
+
+            steps {
+
+                sh '''
+
+                trivy fs . \
+                --severity HIGH,CRITICAL \
+                --exit-code 1 \
+                --format table
+
+                '''
+
+            }
+
+        }
+
+        stage('Secret Scan') {
+
+            steps {
+
+                sh '''
+
+                trivy fs . \
+                --scanners secret \
+                --exit-code 1
+
+                '''
+
+            }
+
+        }
+
+        stage('Package Application') {
+
+            steps {
+
+                sh "mvn clean package -DskipTests"
+
+            }
+
+        }
+
+        stage('Publish Artifact To Nexus') {
+
+            steps {
+
+                withMaven(
+                        globalMavenSettingsConfig: 'global-settings',
+                        jdk: 'JDK20',
+                        maven: 'Maven3'
+                ) {
+
+                    sh "mvn deploy"
+
+                }
+
+            }
+
+        }
+
+        stage('Docker Build') {
+
+            steps {
+
+                sh """
+
+                docker build \
+                -t ${APPLICATION}:${IMAGE_TAG} .
+
+                """
+
+            }
+
+        }
+
+        stage('Image Scan') {
+
+            steps {
+
+                sh """
+
+                trivy image \
+                --severity HIGH,CRITICAL \
+                --exit-code 1 \
+                ${APPLICATION}:${IMAGE_TAG}
+
+                """
+
+            }
+
+        }
+
+        stage('Generate SBOM') {
+
+            steps {
+
+                sh """
+
+                trivy image \
+                --format cyclonedx \
+                -o sbom.json \
+                ${APPLICATION}:${IMAGE_TAG}
+
+                """
+
+            }
+
+        }
+
+        stage('Amazon ECR Login') {
+
+            steps {
+
+                withAWS(credentials:'aws-creds',region:"${AWS_REGION}") {
+
+                    sh """
+
+                    aws ecr get-login-password \
+                    | docker login \
+                    --username AWS \
+                    --password-stdin ${AWS_ACCOUNT}.dkr.ecr.${AWS_REGION}.amazonaws.com
+
+                    """
+
+                }
+
+            }
+
+        }
+
+        stage('Push Image To Amazon ECR') {
+
+            steps {
+
+                sh """
+
+                docker tag ${APPLICATION}:${IMAGE_TAG} ${ECR_URI}:${IMAGE_TAG}
+
+                docker push ${ECR_URI}:${IMAGE_TAG}
+
+                """
+
+            }
+
+        }
+        
+        stage('Deploy To DEV EKS') {
+
+            steps {
+
+                withAWS(credentials: 'aws-creds', region: "${AWS_REGION}") {
+
+                    sh """
+
+                    aws eks update-kubeconfig \
+                        --region ${AWS_REGION} \
+                        --name dev-eks-cluster
+
+                    """
+
+                    sh """
+
+                    helm upgrade --install ${APPLICATION} ./helm/payment-service \
+                        --namespace dev \
+                        --create-namespace \
+                        --set image.repository=${ECR_URI} \
+                        --set image.tag=${IMAGE_TAG} \
+                        --wait \
+                        --timeout 10m
+
+                    """
+
+                }
+
+            }
+
+        }
+
+        stage('Verify Rollout') {
+
+            steps {
+
+                sh """
+
+                kubectl rollout status deployment/${APPLICATION} \
+                    -n dev \
+                    --timeout=300s
+
+                """
+
+            }
+
+        }
+
+        stage('Verify Pods') {
+
+            steps {
+
+                sh """
+
+                kubectl get pods -n dev
+
+                kubectl get svc -n dev
+
+                kubectl get ingress -n dev
+
+                """
+
+            }
+
+        }
+
+        stage('Helm Validation') {
+
+            steps {
+
+                sh """
+
+                helm ls -n dev
+
+                helm status ${APPLICATION} -n dev
+
+                """
+
+            }
+
+        }
+
+        stage('Smoke Test') {
+
+            steps {
+
+                sh """
+
+                curl --fail \
+                http://dev.bank.com/actuator/health
+
+                """
+
+            }
+
+        }
+
+        stage('Readiness Check') {
+
+            steps {
+
+                sh """
+
+                kubectl wait \
+                --for=condition=Ready \
+                pod \
+                --all \
+                -n dev \
+                --timeout=300s
+
+                """
+
+            }
+
+        }
+
+        stage('Observability Validation') {
+
+            parallel {
+
+                stage('Prometheus') {
+
+                    steps {
+
+                        echo "Validate Prometheus Metrics"
+
+                    }
+
+                }
+
+                stage('Grafana') {
+
+                    steps {
+
+                        echo "Validate Grafana Dashboard"
+
+                    }
+
+                }
+
+                stage('ELK') {
+
+                    steps {
+
+                        echo "Validate Logs In Kibana"
+
+                    }
+
+                }
+
+                stage('OpenTelemetry') {
+
+                    steps {
+
+                        echo "Validate OTEL Traces"
+
+                    }
+
+                }
+
+                stage('AWS X-Ray') {
+
+                    steps {
+
+                        echo "Validate X-Ray Traces"
+
+                    }
+
+                }
+
+            }
+
+        }
+
+        stage('Archive Reports') {
+
+            steps {
+
+                archiveArtifacts artifacts: '''
+                    sbom.json,
+                    **/target/*.jar,
+                    **/target/site/jacoco/*,
+                    trivy*.html
+                ''', fingerprint: true
+
+            }
+
+        }
+
+    }
+
+    post {
+
+        success {
+
+            emailext(
+
+                subject: "DEV Pipeline SUCCESS - ${BUILD_NUMBER}",
+
+                body: """
+
+                Build Successful
+
+                Application : ${APPLICATION}
+
+                Image : ${ECR_URI}:${IMAGE_TAG}
+
+                Environment : DEV
+
+                """,
+
+                attachmentsPattern: '''
+                sbom.json,
+                trivy*.html
+                '''
+
+            )
+
+        }
+
+        failure {
+
+            script {
+
+                echo "Deployment Failed"
+
+                sh """
+
+                helm rollback ${APPLICATION} 1 -n dev || true
+
+                """
+
+            }
+
+            emailext(
+
+                subject: "DEV Pipeline FAILED - ${BUILD_NUMBER}",
+
+                body: """
+
+                Build Failed
+
+                Please check Jenkins Console.
+
+                ${BUILD_URL}
+
+                """
+
+            )
+
+        }
+
+        always {
+
+            cleanWs()
+
+        }
+
+    }
+
+}
